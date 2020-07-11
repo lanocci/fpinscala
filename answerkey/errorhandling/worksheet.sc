@@ -42,5 +42,45 @@ def map2[A, B, C](a: Option[A], b: Option[B])(f: (A, B) => C): Option[C] = {
 }
 
 def sequence[A](as: List[Option[A]]): Option[List[A]] = {
-  as.foldRight[Option[List[A]]](Some(Nil))((a, b) => map2(a, b)(_ :: _))
+  as.foldRight[Option[List[A]]](Some(Nil))((h, t) => map2(h, t)(_ :: _))
+}
+
+def traverse[A, B](as: List[A])(f: A => Option[B]): Option[List[B]] = {
+  as.foldRight[Option[List[B]]](Some(Nil))((h, t) => map2(f(h), t)(_ :: _))
+}
+
+sealed trait Either[+E, +A] {
+  def map[B](f: A => B): Either[E, B] = this match {
+    case Right(a) => Right(f(a))
+    case l: Left[E] => l
+  }
+  def flatMap[EE >: E, B](f: A => Either[EE, B]): Either[EE, B] = this match {
+    case Right(a) => f(a)
+    case l: Left[E] => l
+  }
+  def orElse[EE >: E, B >: A](b: => Either[EE, B]): Either[EE, B] = this match {
+    case r: Right[A] => r
+    case Left(_) => b
+  }
+  def map2[EE >: E, B, C](b: Either[EE, B])(f: (A, B) => C): Either[EE, C] = this match {
+    case Right(av) => b.map(bv => f(av, bv))
+    case l: Left[E] => l
+  }
+  def map2_2[EE >: E, B, C](b: Either[EE, B])(f: (A, B) => C): Either[EE, C] = for { av <- this; bv <- b } yield f(av, bv)
+
+  //def sequence[E, A](es: List[Either[E, A]]): Either[E, List[A]] = es.foldRight[Either[E, List[A]]](Right(Nil))((h, t) => h.flatMap(hv => t.map(tv => hv :: tv)))
+
+  //def traverse[E, A, B](as: List[A])(f: A => Either[E, B]): Either[E, List[B]] = as.foldRight[Either[E, List[B]]](Right(Nil))((h, t) => f(h).flatMap(r => t.map(tv => r :: tv)))
+  def traverse[E, A, B](as: List[A])(f: A => Either[E, B]): Either[E, List[B]] =
+    as.foldRight[Either[E, List[B]]](Right(Nil))((h, t) => f(h).map2(t)(_ :: _))
+
+  def sequence[E, A](es: List[Either[E, A]]): Either[E, List[A]] = traverse(es)(a => a)
+
+}
+case class Left[+E](value: E) extends Either[E, Nothing]
+case class Right[+A](value: A) extends Either[Nothing, A]
+
+def Try[A](a: => A): Either[Exception, A] = {
+  try Right(a)
+  catch { case e: Exception => Left(e)}
 }
